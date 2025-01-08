@@ -19,6 +19,10 @@ read FIVEM_IP
 echo "Digite a porta do servidor FiveM (ex: 30120): "
 read FIVEM_PORT
 
+# Solicitar e-mail para Certbot
+echo "Digite o seu e-mail para o Certbot (será usado para notificações): "
+read EMAIL
+
 # Atualizando pacotes do sistema
 sudo apt update -y
 sudo apt upgrade -y
@@ -27,10 +31,10 @@ sudo apt upgrade -y
 sudo apt install nginx -y
 sudo apt install certbot python3-certbot-nginx -y
 
-# Garantir que o arquivo default esteja limpo e apenas com a configuração necessária
+# Limpar e configurar o arquivo default com as definições necessárias
 echo "Configurando o arquivo default do Nginx..."
 
-# Limpar e configurar o arquivo default com as definições necessárias
+# Criar uma configuração limpa para o arquivo default
 sudo tee /etc/nginx/sites-available/default > /dev/null <<EOL
 server {
     listen 80 default_server;
@@ -44,11 +48,14 @@ server {
     location / {
         try_files \$uri \$uri/ =404;
     }
+}
 
-    upstream backend {
-        server $FIVEM_IP:$FIVEM_PORT;  # IP e porta do servidor FiveM fornecido pelo usuário
-    }
+# Direção de upstream fora do bloco de server
+upstream backend {
+    server $FIVEM_IP:$FIVEM_PORT;  # IP e porta do servidor FiveM fornecido pelo usuário
+}
 
+server {
     # Redirecionar HTTP para HTTPS
     if (\$host = www.$DOMAIN) {
         return 301 https://\$host\$request_uri;
@@ -99,8 +106,13 @@ server {
 }
 EOL
 
-# Ativando o site e criando o link simbólico
-sudo ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/
+# Verificar se o link simbólico já existe antes de tentar criá-lo
+if [ ! -L /etc/nginx/sites-enabled/default ]; then
+    # Criar o link simbólico
+    sudo ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/
+else
+    echo "O link simbólico para /etc/nginx/sites-enabled/default já existe."
+fi
 
 # Testando a configuração do Nginx
 sudo nginx -t
@@ -108,9 +120,9 @@ sudo nginx -t
 # Reiniciando o Nginx para aplicar as alterações
 sudo systemctl restart nginx
 
-# Solicitar o e-mail e gerar o SSL com Certbot
-echo "Gerando certificados SSL para o domínio $DOMAIN"
-sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN --redirect --agree-tos --no-eff-email --email usuario@example.com
+# Gerar o SSL com Certbot
+echo "Gerando certificados SSL para o domínio $DOMAIN com o e-mail $EMAIL"
+sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN --redirect --agree-tos --no-eff-email --email $EMAIL
 
 # Confirmando que o Certbot configurou o SSL corretamente
 echo "Certificados SSL gerados com sucesso!"
